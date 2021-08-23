@@ -1,0 +1,75 @@
+---
+title: "Stat 199 Final Project"
+author: "Team - Marley Dooling, Carter Harrigian, Mario Alverez"
+output: pdf_document
+---
+```{r load-packages, message=FALSE}
+library(tidyverse)
+library(dplyr)
+library(infer)
+```
+
+***Dataset 1- Social Media Usage of Politicians***
+```{r data-1, message= FALSE}
+Social_media_statistics_for_members_of_the_116th_Congress <- 
+  read_csv("data/appendix csvs/Social media statistics for members 
+           of the 116th Congress.csv")
+Top_100_terms_associated_with_engagement_boosts_in_each_party <- 
+  read_csv("data/appendix csvs/Top 100 terms associated with engagement 
+           boosts in each party.csv")
+```
+**Data**: This data is sourced from the Pew Research Center, and it details 
+every Facebook post and tweet published by all official and unofficial accounts 
+maintained by every member of the U.S. Senate and House of Representatives 
+from Jan. 1, 2015, to May 31, 2020. This data set contains almost 1.5 million 
+Facebook posts, 3.3 million tweets, and additional data from 1,388 and 1,362 
+congressional Facebook and Twitter accounts, respectively. For our research 
+question, the relevant variables to consider are political party, social media 
+platform, both "percent effect" variables, and term (referring to words used on
+social media, not length of term in congress). 
+
+**Research Question**: Is there a correlation between political party, social
+media platform usage, specific term usage, and engagement (as measured by 
+"percent effect" on reactions/favorites and shares/retweets)? Null hypothesis 
+would be that there is no statistically significant correlation between party 
+affiliation and social media activity, while the alternative would be that there 
+is a correlation between the variables.
+
+***Dataset 2- UN Labor Force Participation***
+```{r dataset-2, message = FALSE}
+laborgender <- read.csv('data/laborgender.csv')%>%
+  select(-X)
+```
+**Data**: This data is sourced from the United Nations datamart, and includes
+values only from the year 2015 and only for countries where data was able to be
+collected, and therefore excludes many failed African and Asian states, among
+others. It is a by-country and by-region analysis of various metrics relating
+to women's civil rights and health, as well as their labor participation rate.
+
+**Research Question**: What are the social, economic, physical, and political
+factors most strongly impacting the labor force participation rate of women
+worldwide? Null hypothesis would be that these factors do not affect labor 
+force participation, and alternative hypothesis is that they do have an affect 
+on the participation in labor force.
+
+***Dataset 3- NBA***
+```{r dataset-3, message = FALSE}
+nba_raptor_play <- read.csv('data/nba-raptor/modern_RAPTOR_by_player.csv')
+```
+**Data**: This data comes from the RAPTOR prediction model (Robust Algorithm
+using Player Tracking and On/off Ratings) that aims to predict player success 
+through modern NBA metrics of plus-minus, win-shares, and wins above replacement
+. The newest metric is on/off data, which analyzes team performance while 
+player is on and off the floor, and it was designed to help understand player 
+value for general managers and teams looking to trade. Height, age, and 
+position are not elements of this dataset, so it just examines raw impact 
+of players on the court with a higher weight on box score performance (score).
+
+**Research Question**: What RAPTOR elements are most crucial for team success 
+in recent years, and how do defensive and offensive success according to RAPTOR 
+translate into team and player success? The null hypothesis would be that 
+neither defense nor offense is more important to modern NBA win-shares / success
+, and the alternative hypothesis is that either defense or offense is more 
+relevant to modern NBA success.
+
+

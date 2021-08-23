@@ -1,0 +1,607 @@
+---
+title: "The Predictors of Equitable Female Labor Force Participation"
+author: "Lucky Charms - Marley Dooling, Carter Harrigian, Mario Alvarez"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+# The Determinants of Female Labor Force Participation Rate Parity
+
+```{r load-packages, message=FALSE, echo = FALSE}
+library(tidyverse)
+library(dplyr)
+library(infer)
+library(patchwork)
+library(broom)
+library(fivethirtyeight)
+library(car)
+library(olsrr)
+library(ggpubr)
+```
+
+```{r importset, echo = FALSE}
+laborgender <- read.csv('data/laborgender.csv')%>%
+  select(-X)
+
+laborgender <- laborgender[, c(1,2,3,4,5,6,7,8,15,9,10,11,12,13,14,16,17,18,19)]
+```
+
+```{r scaledset, echo = FALSE, warning = FALSE}
+laborgenderscaled <- laborgender%>%
+  mutate(GII = GII*100,
+         HDI = HDI*100,
+         EconomyFrag = EconomyFrag*10,
+         EconIneq = EconIneq*10,
+         PublicServFrag = PublicServFrag*10,
+         HumanRightsFrag = HumanRightsFrag*10,
+         Fertility = Fertility*10,
+         SecondaryRatio = SecondaryRatio*100,
+         LogDiff = if_else(LBFPRDiff > 0, log(LBFPRDiff), 0))%>%
+  filter(Country != "Saint Lucia" & Country != "Tonga")%>%
+  select(-TertiaryRatio)
+```
+
+# Introduction and data
+
+## Question and context
+
+Our focal research question is **"What social, political,**
+**physical, and economic factors affect the labor force participation rate of**
+**women around the world and its parity to male participation?"**
+
+Our approach to arriving at the answer will be multifaceted: 
+
+First, we will recognize the limitations of our data-set and extrapolate data
+based on entries we know to be missing and our knowledge of geopolitics. We will 
+also mention how our model fits the best it possibly could.
+
+Secondly, we will create appropriate visuals to understand and explain the
+distribution of factors and relationships between them. 
+
+Thirdly, the crux of our research will focus on labor force participation rates, specifically evaluating how they correlate to other factors like teen pregnancy, 
+female representation in politics, etc. 
+
+By using the quantitative methods covered in introductory data science course 
+(among them visualizations and linear models), our research seeks to analyze
+the complex relationship between gender dynamics and economic trends. Since the 
+full story and factors that surround gender inequality will often be unique to 
+culture and region, our data and conclusions will have some overarching 
+limitations. It is always difficult to draw conclusions on a global variable, 
+and we believe that the models we created are best fitting even with the idea 
+of cultural differences looming as a downside of the results.
+
+Our **hypothesis** at the onset are that lower measures
+of gender equality (unequal), political stability, and human development will 
+lead to lower female labor force participation rates and higher disparities 
+between males and females.
+
+## Data Source and Components
+
+From the United Nations Datamart[1], we constructed a dataset 
+combining factors such as labor force participation rates, fertility rates, 
+measures of development, and others. Data collected is either from 2015 or 
+from an interval including it: Fertility rates in particular are for the 
+2010-2015 period.
+
+Each row describes a country, its continent, and 16 other numeric variables
+ranging from indicators of political fragility to measures of development.
+
+The most crucial variables at the onset are:
+
+**HDI**: Human Development Index. From 0 to 1, measures a country's level of
+  development chiefly by lifespan, education level, and gross national income
+  per-capita.
+  
+**LBFPRFem**: Female labor force participation rate.
+
+**LBFPRDiff**: How much higher, in percentage points, the male labor force
+  participation rate is than the female rate.
+  
+**FSI**: The Fragile States Index. Higher values indicates a country is more
+  vulnerable to conflict and governmental collapse.[3]
+
+All variables are explained, with units, on the accompanying README.
+
+# Methodology
+
+## Constraints and Methods
+
+We begin our exploration by putting forth that all statistical analysis will be
+conducted at the $\alpha$ = 0.10 significance level, and confidence intervals
+will be at the 90% confidence level. These levels were picked with the variable
+and unpredictable nature of human society in mind, and this allows us to still 
+draw strong conclusions with variables that will have lots of variability as 
+global data does.
+
+The early visualizations have two primary goals: to understand the scope of 
+global data and to allow the reader to see the general trends before any 
+intervals or modeling is done. These graphs and plots are meant to be the 
+reasoning behind and segway into more complex models that are meant to 
+extrapolate data to draw more meaningful conclusions. The strength of the 
+predictors that we aim to showcase through visualizations are evidence in 
+support of the model that we create. With this said, we will attempt to maximize
+strength of the model while maintaining diversity type of statistics calculated.
+
+We will focus on analyzing **LBFPRDiff**, a variable indicating the rate
+disparity between female and male labor force participation in an attempt to 
+see which social, political, physical, and economic measures drive disparity.
+
+## Establishing a Baseline
+
+Faceting Data by region gives good context as to the true variability in global 
+data and how regionally dependent similar data points tend to be. This high 
+variability also explains the lower r-squared value that we will see later on. 
+
+**Figure 1**
+
+```{r Regions, echo = FALSE, fig.height = 4, fig.width = 8}
+laborgender %>% 
+  ggplot(mapping = aes(x = LBFPRDiff)) +
+    geom_histogram(binwidth = 3, color = "pink") + 
+    facet_wrap(~ Continent) +
+    labs(x = "Participation Rate Disparity", 
+         y = "Count", 
+       title = "Distribution of Disparity in Female Labor Force Participation", 
+       subtitle = "Percentage By Region") +
+    theme_light()
+```
+
+We can also do the same thing by looking at women in government (positions
+of power) to get a better handle on Women in the Labor Force. 
+We will again group by region to see if there are any trends. 
+
+**Table 0A**
+
+```{r labormean, echo = FALSE}
+labormean <- laborgender %>%
+  group_by(Continent) %>%
+  mutate(meancont = mean(WomenInGovt)) %>%
+  select(Continent, meancont) %>%
+  slice(1) 
+labormean
+```
+
+```{r labormeanbar, echo = FALSE, fig.width = 8, fig.height = 3}
+ch1 <- labormean %>%
+  ggplot(mapping = aes(x = Continent, y = meancont)) + 
+  geom_col(fill = "grey", color = "darkblue") + 
+  theme_minimal() +
+  labs(title = "Percentage of Women in Gov't by Continent", subtitle = "
+       Using National values to Compute Average", x = "Continent", 
+       y = "Percentage of Women in Gov't")
+```
+
+**Table 0B**
+
+```{r HDImean, echo = FALSE}
+HDImean <- laborgender %>%
+  group_by(Continent) %>%
+  mutate(meanhdi = mean(HDI)) %>%
+  select(Continent, meanhdi) %>%
+  slice(1) 
+HDImean
+```
+
+```{r HDImeanplot, echo = FALSE}
+ch2 <- HDImean %>%
+  ggplot(mapping = aes(x = Continent, y = meanhdi)) + 
+  geom_col(fill = "grey", color = "darkblue") + 
+  theme_minimal() +
+  labs(title = "Mean Human Development Index", subtitle = "
+       Using National values to Compute Average", x = "Continent", 
+       y = "HDI Avg")
+```
+
+By visualizing women in power and HDI values throughout continents, we can see 
+if the bar graphs look similar. This would insinuate that these statistics go 
+hand-in-hand as past research suggests.
+
+**Figure 2**
+
+```{r Means, echo = FALSE, message = FALSE, warning = FALSE, fig.height= 4, fig.width = 10}
+(ch1) + (ch2)
+```
+
+To analyze the trends between the disparity between female and male labor
+force participation rates and other variables, we first address a hypothesis
+and visualize the possible correlation between the rate difference and human
+development within our data.
+
+**Note: Rate is calculated (Male rate - Female rate)** 
+
+```{r HDIeffect, echo = FALSE}
+HDIdiff <- laborgender%>%
+  ggplot(mapping = aes(x = HDI, y = LBFPRDiff))+
+  geom_point()+
+  geom_smooth(se = FALSE, method = lm)+
+  labs(title = "HDI vs. Rate disparity in labor force participation",
+       x = "HDI", y = "Rate difference")
+```
+
+```{r FSIeffect, echo = FALSE}
+FSIdiff <- laborgender%>%
+  ggplot(mapping = aes(x = FSI, y = LBFPRDiff))+
+  geom_point()+
+  geom_smooth(se = FALSE, method = lm)+
+  labs(title = "FSI vs. Rate disparity in labor force participation",
+       x = "FSI", y = "Rate difference")
+```
+
+**Figure 3**
+
+```{r HDIFSI, echo = FALSE, message = FALSE, warning = FALSE, fig.height= 4, fig.width = 10}
+(HDIdiff) + (FSIdiff)
+```
+
+The basic scatterplot shows a slightly negative relationship between HDI and
+the Rate disparity, implying that on average a higher HDI lowers disparity,
+and also an opposing slightly positive relationship between FSI and the Rate
+disparity.
+
+Looking at the plot, there is a notable increased variance in Rate disparity
+both when the HDI is low and when the FSI is high, implying that less developed
+and more unstable countries have another range of factors affecting them
+that merit deeper analysis for our entire data set.
+
+```{r SDs, echo = FALSE, message = FALSE, warning = FALSE}
+sd1 <- laborgender%>%
+  filter(HDI <= 0.6)%>%
+  summarize(sd = sd(LBFPRDiff))
+sd2 <- laborgender%>%
+  filter(HDI > 0.6)%>%
+  summarize(sd = sd(LBFPRDiff))
+sd1$sd - sd2$sd
+```
+
+The standard deviation in the interval HDI $\le$ 0.6 is 6.32 units higher than
+the interval above it. The need to justify this leads into the linear model
+section of our research, in which we attempt to find which appropriate
+variables cause the most variability in the rate disparity.
+
+To accomplish this, we will use the same dataset but with a scale on each
+variable allowing coefficients to be interpreted more easily. We first remove
+some irrelevant variables that have either a perfect or unquantifiable
+relationship with rate disparity.
+
+**Table 1**
+
+```{r DiffReg, echo = FALSE}
+DiffReg <- lm(LBFPRDiff ~ FSI + WomenInGovt + Fertility,
+              data = laborgenderscaled)
+glance(DiffReg)
+tidy(DiffReg, conf.level = 0.9, conf.int = TRUE)
+```
+
+An r-squared value above 0.10 is generally one that accepted within 
+the social sciences sphere [4] because of the variability we discussed earlier.
+However in search of a better model, we shed FSI and HDI as possible values for
+a linear regression model and analyze other continuous data to investigate 
+the original hypothesis.
+
+
+```{r augmenter_diff, echo = FALSE}
+DiffReg_aug <- augment(DiffReg)
+```
+
+```{r independence_check, echo = FALSE}
+c1 <- ggplot(DiffReg_aug, aes(x = seq(nrow(DiffReg_aug)), y = .resid)) + 
+  geom_point() + 
+  labs(title = "Independence Check", x = "Index", y = "Residual value") +
+  theme_minimal()
+```
+
+```{r equal_variance_and_linearity_check, echo = FALSE}
+c2 <- ggplot(DiffReg_aug, mapping = aes(x = .fitted, y = .resid)) +
+  geom_point() + 
+  geom_hline(yintercept = 0, color = "red", lty = 2) +
+  labs(title = "Equal Variance and Linearity Check", x = "Predicted Value", y = "Residual value") +
+  theme_minimal()
+```
+
+```{r normality_check_1, echo = FALSE}
+c3 <- ggplot(DiffReg_aug, mapping = aes(x = .resid)) +
+  geom_histogram(binwidth = 2, fill = "grey", color = "darkblue") + 
+  labs(title = "Normality Check (Histogram)", x = "Residuals", y = "Count") +
+  theme_minimal()
+```
+
+```{r normality_check_2, echo = FALSE}
+c4 <- ggplot(DiffReg_aug, mapping = aes(sample = .resid)) +
+  stat_qq() + 
+  stat_qq_line() +
+  labs(title= "Normality Check (Linear Regression)")+
+  theme_minimal()
+```
+
+**Figure 4**
+
+```{r modelchecks, fig.height = 4, fig.width = 8, echo = FALSE}
+(c1 + c2) / (c3 + c4)
+```
+
+After conducting these tests, we arrive at a multiple regression linear model that
+holds the rate disparity as a relative function of the fragility of human
+rights infrastructure, the teen birth rate, and the percentage of women in
+the legislature. However, we notice above that the residuals have a distinct
+right skew. After testing each variable to determine which predictor was responsible
+for this skew, we determined that all were somewhat right skewed. This is 
+most likely because some of the more developed nations are skewing the data 
+more right.
+
+```{r predictorcheck, echo = FALSE}
+DiffReg_1 <- lm(formula = LBFPRDiff ~ (0*HumanRightsFrag) + (0*WomenInGovt) + TeenBirthRate, 
+    data = laborgenderscaled)
+DiffReg_1_aug <- augment(DiffReg_1)
+
+DiffReg_2 <- lm(formula = LBFPRDiff ~ (HumanRightsFrag) + (0*WomenInGovt) + (0*TeenBirthRate), 
+    data = laborgenderscaled)
+DiffReg_2_aug <- augment(DiffReg_2)
+
+DiffReg_3 <- lm(formula = LBFPRDiff ~ (0*HumanRightsFrag) + WomenInGovt + (0*TeenBirthRate), 
+    data = laborgenderscaled)
+DiffReg_3_aug <- augment(DiffReg_3)
+```
+
+```{r TBRCheck, echo = FALSE}
+d1 <- ggplot(DiffReg_1_aug, mapping = aes(x = .resid)) +
+  geom_histogram(binwidth = 2, fill = "grey", color = "darkblue") + 
+  labs(title= "Normality Checks", subtitle = "Teen Birth Rate", x = "Residuals", y = "Count") +
+  theme_minimal()
+```
+
+```{r HRFCheck, echo = FALSE}
+d2 <- ggplot(DiffReg_2_aug, mapping = aes(x = .resid)) +
+  geom_histogram(binwidth = 2, fill = "grey", color = "darkblue") + 
+  labs(subtitle = "Human Rights Fragility", x = "Residuals", y = "Count") +
+  theme_minimal()
+```
+
+```{r WIGCheck, echo = FALSE}
+d3 <- ggplot(DiffReg_3_aug, mapping = aes(x = .resid)) +
+  geom_histogram(binwidth = 2, fill = "grey", color = "darkblue") + 
+  labs(subtitle = "Women in Government", x = "Residuals", y = "Count") +
+  theme_minimal()
+```
+
+**Figure 5**
+
+```{r varchecks, fig.height = 4, fig.width = 8, echo = FALSE}
+(d1 + d2)/(d3)
+```
+As these visualizations illustrate, our model needed to be altered to better
+fit our data. Therefore, we adjusted our model such that it holds the natural 
+logarithm of the rate disparity as a regression function of other variables, 
+using software to achieve the highest possible adjusted $R^2$. This also 
+would help with the rightward skew that we see on the q-q plot.
+
+**Table 2**
+
+```{r optimalmodel, echo = FALSE}
+DiffReg2 <- lm(LogDiff ~ . -LBFPRFem -Country -Continent -LBFPRMal - LBFPRTotal -GII -HDI -LBFPRDiff,
+               data = laborgenderscaled)
+DiffReg2 <- ols_step_forward_p(DiffReg2, penter = 0.1)$model
+tidy(DiffReg2, conf.int = TRUE, conf.level = 0.9)
+glance(DiffReg2)
+```
+Then, we ran regression diagnostics again using our updated model. As the graphs
+below illustrate, this adjusted model better fits our data, and will thus allow
+us to make more accurate predictions about labor force participation disparities.
+
+```{r varcheck_DiffReg2, echo = FALSE}
+DiffReg2_aug <- augment(DiffReg2)
+
+e1 <- ggplot(DiffReg2_aug, aes(x = seq(nrow(DiffReg2_aug)), y = .resid)) + 
+  geom_point() + 
+  labs(title = "Independence Check", x = "Index", y = "Residual value") +
+  theme_minimal()+
+  ylim(-4,4)
+
+e2 <- ggplot(DiffReg2_aug, mapping = aes(x = .fitted, y = .resid)) +
+  geom_point() + 
+  geom_hline(yintercept = 0, color = "red", lty = 2) +
+  labs(title = "Equal Variance and Linearity Check", x = "Predicted Value", y = "Residual value") +
+  theme_minimal()+
+  ylim(-4,4)
+
+e3 <- ggplot(DiffReg2_aug, mapping = aes(x = .resid)) +
+  geom_histogram(binwidth = 0.25, fill = "grey", color = "darkblue") + 
+  labs(title = "Normality Check (Histogram)", x = "Residuals", y = "Count") +
+  theme_minimal()
+
+e4 <- ggplot(DiffReg2_aug, mapping = aes(sample = .resid)) +
+  stat_qq() + 
+  stat_qq_line() +
+  labs(title= "Normality Check (Linear Regression)")+
+  theme_minimal()+
+  ylim(-4,4)
+```
+
+**Figure 6**
+
+```{r fig.height = 4, fig.width = 8, echo = FALSE}
+(e1 + e2) / (e3 + e4)
+```
+
+The sole remaining weakness in our model are a handful of very low residuals
+that exist as a result of logarithm properties in analyzing countries with
+very low disparities. We opt to leave them rather than further adjust our
+model so as to not misrepresent any other data. Also, the q-q plot 
+fits better as was mentioned prior.
+
+**Figure 7**
+
+```{r augmentdiff, echo = FALSE, fig.height = 4.5, fig.width = 8}
+tibble (
+  Fertility = median(laborgenderscaled$Fertility),
+  FSI = laborgenderscaled$FSI,
+  WomenInGovt = laborgenderscaled$WomenInGovt
+)%>%
+  augment(DiffReg2, newdata = .)%>%
+  ggplot(mapping = aes(x = WomenInGovt, y = FSI, color = .fitted))+
+  geom_point()+
+  scale_color_gradient(low = "darkgreen", high = "red")+
+  labs(title = "Rate disparity as a function of stability and political representation", x = "Proportion of women in legislature",
+       subtitle = "Holding fertility constant at its median",
+       y = "Fragile States Index",
+       color = "Predicted log of rate disparity")
+```
+Holding fertility constant at its median, we visualize here the negative
+relation between women's representation and the rate disparity, and the positive
+relationship between FSI and rate disparity, both in logarithmic terms. We
+remove **Fertility** from the plot due to limitations on multidimensional
+visualization while noting that it, too, has a negative effect on the log
+of the rate disparity.
+
+# Results
+
+## Analyzing Disparities
+
+**Table 3**
+
+```{r tidier, echo = FALSE}
+tidy(DiffReg2, conf.int = TRUE, conf.level = 0.9)
+```
+
+**Table 4**
+
+```{r OddsLog, echo = FALSE}
+tidy(DiffReg2) %>%
+  mutate(estimate_mult = exp(estimate)) %>%
+  select(term, estimate, estimate_mult, starts_with("conf"))
+```
+
+
+Firstly, we analyze and write out the results of our final log-based model. We
+see that, **on average**, and holding the rest of variables constant: 
+
+An increase of one tenth in **FSI** increases the log-rate
+disparity by 0.0113, with a 90% confidence interval ranging from 0.00393 to 
+0.0186. The disparity is therefore multiplied by around 1.011 for the 
+same increase.
+
+An increase of one percentage point in **women's representation in legislature**
+decreases the log-rate disparity by 0.0254, with a 90% confidence interval
+ranging from 0.0146 to 0.0362. The disparity is therefore multiplied 
+by around 0.975 for the same increase.
+
+An increase of **one tenth of a birth per woman** decreases the log-rate
+disparity by 0.0275, with a 90% confidence interval ranging from 0.0153 to
+0.0398. The disparity is are therefore multiplied by around 0.973 for the 
+same increase, or around 0.760 for a **one-birth** increase.
+
+We write these predictors out, returning to the original scale:
+
+$$LogDiff = 3.331 + 0.0113\times{FSI} - 0.0254\times{WomenInGovt} - 0.275\times{Fertility}$$
+
+Also, the latter measurements were derived from returning to a linear rate
+disparity variable by exponentiation of both sides of the equation, like so:
+
+$$LBFPRDiff = e^{3.331 + 0.0113\times{FSI} - 0.0254\times{WomenInGovt} - 0.275\times{Fertility}}$$
+
+Where, by exponent rules, we can separate each term of the right-hand exponent
+and propose that corresponding increases/decreases in the variable result in
+multiplications of the rate disparity.
+
+We reiterate per our statistical methods that all our predictors have p-values
+of under 0.1, **women's representation** having 0.000167, Fertility having
+0.000325, and FSI having 0.0124.
+
+By our adjusted $R^2$, we conclude that our model accounts for 22.9% of the
+variability in the log-rate disparity, a value that is not only the highest of
+our displayed models but also the highest possible, as any removal or addition
+would reduce this value. We are therefore satisfied with it, particularly given
+our topic[4]. We discuss the possibility of improvement in further research
+in the next section.
+
+Now returning with this model to analyze on a global scale, we recall from our
+methodology and dataset analysis that the more undeveloped regions of Asia,
+Africa and Oceania suffer from the least equitable representations in
+government, as well as the highest measures of instability and a tendency
+toward higher fertility rates. Then, per our model, these regions will have
+the highest rate disparities, as the mitigating effect of fertility is not
+sufficient to counterbalance their substantial rises in instability and
+decreases in female representation.
+
+## Discussion
+
+From our research, we were able to ascertain that increases in a country's
+political stability and safety, female representation in government, and
+fertility are conducive to lower disparities in labor force participation. 
+Therefore, a country with a stable internal system where women 
+own a representative share of governance will enjoy the lowest disparities, with
+another mitigating effect coming from fertility, indicating that
+perhaps countries where women birth more also expect women to work some
+manner of job and contribute to their communities. Overall, stable countries
+with higher standards of female self-determination will, in general, enjoy
+the lowest disparities.
+
+Despite our research's thoroughness, our data suffers from much the same
+handicap that UN data does - many unstable or struggling countries do not
+have appropriate data collection facilities for one or more of the variables
+and therefore cannot always be included in considerations. Secondly, it is
+unlikely that even 17 variables can strongly predict a trend in human and
+societal behavior. Thirdly, while we analyzed labor force participation rates
+and parity, we did not focus on quality of work or wages and their own parity.
+Fourthly, we concede that our model remains appropriate but becomes more
+erratic for less developed countries, indicating the need for more variables
+to analyze.
+
+With this reality in mind, we evaluated additional trends we noticed globally.
+To begin, we notice a weak positive correlation between Fragile States Index (FSI)
+and labor force participation rate disparities between men and women. This 
+suggests that, in general, countries that are more vulnerable to conflict and 
+governmental collapse have a workforce containing a lower proportion of women
+(relative to men). This finding supports our hypothesis that lower
+measures of gender equality, political stability, etc. lead to greater disparities
+in labor force participation rates. Furthermore, we also found that "development"
+-as measured by the Human Development Index (HDI)-is weakly negatively correlated
+with rate disparities. Essentially, this means that as nations become increasingly
+more developed, men and women are slightly more equally represented in the
+workforce.
+This finding further supports our hypothesis that increasing human development
+will lower labor-force participation disparities between men and women.
+
+We concede also that all variables in our dataset are intricately tied with
+each other, and so achieving the intercept value is unlikely as, for example,
+an FSI of 0 is theoretically impossible to achieve
+alongside 0 women in government and a 0 teen birth rate. Therefore, our
+intercept itself is not realistic and should be viewed more as a faux initial
+value, and our variables should not be viewed in isolation from one another.
+
+We opted not to include these interaction effects due to both difficulties
+in visualization and unacceptably high variance inflations.
+
+## Reflecting
+
+If we were to be able to do this over again we would likely zone in 
+on a particular region. Global data is difficult to manipulate because we 
+don't want to exclude data points, but also want meaningful visualizations.
+Being as specific as possible when using data in the humanities allows 
+us to draw more meaningful conclusions, and if we were to do this project again 
+we know that "meaningfulness" would be a primary goal of the results and 
+visualizations. We would also use data that is less tied, but in this sphere 
+it is hard to find data points that don't use similar metrics.
+
+In summary, we found that an increase in political instability has an
+exacerbating effect on the the disparity between female and male labor force
+participation rates, while an increase in women's representation in government
+and an increase in fertility both have mitigating effects.
+
+We end this paper with a call for further research to use improved
+visual software and more thorough and expansive data - which may take years
+to be collectible - to better predict women's power in labor markets worldwide.
+
+## References
+
+- 1.) United Nations Datamart.
+  https://data.un.org
+  
+  2.) Participation Rate vs. Unemployment Rate: What's the Difference?
+  https://www.investopedia.com/ask/answers/061515/what-key-difference-between-participation-rate-and-unemployment-rate.asp
+  
+  3.) Fragile States Index 2015
+  https://fundforpeace.org/2015/06/17/fragile-states-index-2015-the-book/
+  
+  4.) R- squared values within social sciences
+  https://medium.com/@vince.shields913/why-we-dont-really-care-about-the-r-squared-in-econometrics-social-science-593e2db0391f
